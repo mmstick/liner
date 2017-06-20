@@ -1,4 +1,6 @@
 use std::io::{self, Stdout, stdout, stdin, Write};
+use std::thread;
+use std::time::Duration;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 
@@ -71,14 +73,18 @@ impl Context {
                                       prompt: P,
                                       mut handler: &mut EventHandler<RawTerminal<Stdout>>)
                                       -> io::Result<String> {
-        let res = {
-            let stdout = stdout().into_raw_mode().unwrap();
-            let ed = try!(Editor::new(stdout, prompt.into(), self));
-            match self.key_bindings {
-                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
-                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
+        let res;
+        loop {
+            if let Ok(stdout) = stdout().into_raw_mode() {
+                let ed = try!(Editor::new(stdout, prompt.into(), {self}));
+                res = match self.key_bindings {
+                    KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
+                    KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
+                };
+                break
             }
-        };
+            thread::sleep(Duration::from_millis(100));
+        }
 
         self.revert_all_history();
         res
